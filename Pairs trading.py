@@ -5,24 +5,18 @@ import statsmodels.api as sm
 import statsmodels.tsa.stattools as ts
 import matplotlib.pyplot as plt
 
-# ==============================
 # 1. Data Download and Preparation
-# ==============================
 tickers = ['KO', 'PEP']
 # Download daily data from 2018-01-01 to 2023-01-01
 stock = yf.download(tickers, start='2018-01-01', end='2023-01-01')
 # Select the Close prices
 data = stock['Close']
 
-# Make an explicit copy to avoid SettingWithCopy warnings
 data = data.copy()
 
-# ==============================
 # 2. Cointegration Testing
-# ==============================
 # Run OLS regression: KO ~ const + PEP
 model = sm.OLS(data['KO'], sm.add_constant(data['PEP'])).fit()
-# Save the residuals (spread) in the DataFrame using .loc to avoid warnings
 data.loc[:, 'residuals'] = model.resid
 
 # Perform the Augmented Dickey-Fuller (ADF) test on the residuals
@@ -31,32 +25,28 @@ print("ADF Statistic:", adf_result[0])
 print("p-value:", adf_result[1])
 # A p-value below 0.05 (e.g., 0.01) indicates stationarity and supports cointegration
 
-# ==============================
+
 # 3. Signal Generation
-# ==============================
-# Set parameters based on prior optimization: rolling window and threshold
+# Parameters for rolling window and trade execution thresholds
 window = 10
 base_threshold = 1.5
 
-# Calculate rolling statistics of the residuals (spread)
+# Calculate rolling statistics of the residuals
 data.loc[:, 'spread_mean'] = data['residuals'].rolling(window=window).mean()
 data.loc[:, 'spread_std'] = data['residuals'].rolling(window=window).std()
 
-# Initialize a signal column to 0
 data.loc[:, 'signal'] = 0
 
 # Generate signals based on the spread deviating from its rolling mean:
-# If the residual is below (spread_mean - threshold * spread_std) --> expect reversion upward --> long signal (1)
+# If the residual is below (spread_mean - threshold * spread_std) --> expect reversion upward --> long signal
 data.loc[data['residuals'] < data['spread_mean'] - base_threshold * data['spread_std'], 'signal'] = 1
-# If the residual is above (spread_mean + threshold * spread_std) --> expect reversion downward --> short signal (-1)
+# If the residual is above (spread_mean + threshold * spread_std) --> expect reversion downward --> short signal
 data.loc[data['residuals'] > data['spread_mean'] + base_threshold * data['spread_std'], 'signal'] = -1
 
 # Shift the signal by one day to simulate entering a trade the next day
 data.loc[:, 'signal_shifted'] = data['signal'].shift(1)
 
-# ==============================
 # 4. Backtesting the Base Strategy
-# ==============================
 # Calculate daily returns for each stock
 data.loc[:, 'return_KO'] = data['KO'].pct_change()
 data.loc[:, 'return_PEP'] = data['PEP'].pct_change()
@@ -78,9 +68,7 @@ max_drawdown = drawdown.max()
 print("Base Strategy Sharpe Ratio:", sharpe_ratio)
 print("Base Strategy Maximum Drawdown:", max_drawdown)
 
-# ==============================
 # 5. Incorporating a Stop-Loss Mechanism
-# ==============================
 # Define a stop-loss threshold (e.g., if the trade loses more than 2% from its entry, exit the trade)
 stop_loss_threshold = -0.02
 
